@@ -17,17 +17,36 @@
         padding: 16px;
       }
       h1 { font-size: 14px; font-weight: 500; margin: 0; opacity: 0.7; }
+      #stage { position: relative; }
       canvas {
         background: #16181d;
         border: 1px solid #2a2d33;
-        image-rendering: pixelated;
+        display: block;
       }
       #hud { font-size: 12px; opacity: 0.55; }
+      #hp {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        pointer-events: none;
+      }
+      #hp-bar { width: 200px; height: 10px; background: #000; }
+      #hp-fill { height: 100%; background: #d0556a; width: 100%; transition: width 80ms linear; }
     </style>
   </head>
   <body>
     <h1>two-dinners — WASD/arrows to move, left-click to cast. open a second tab for co-op.</h1>
-    <canvas id="game" width="800" height="600"></canvas>
+    <div id="stage">
+      <canvas id="game" width="800" height="600"></canvas>
+      <div id="hp">
+        <div id="hp-bar"><div id="hp-fill"></div></div>
+        <div id="hp-text">HP 50 / 50</div>
+      </div>
+    </div>
     <div id="hud">connecting…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
