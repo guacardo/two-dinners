@@ -1,18 +1,12 @@
 import { Client } from "colyseus.js";
 import * as THREE from "three";
-import { sfx, unlockAudio, setListener } from "./audio";
+import { setListener, unlockAudio } from "./audio";
+import { PlayerView } from "./views/PlayerView";
+import { EnemyView } from "./views/EnemyView";
+import { BoltView } from "./views/BoltView";
 
-const SPEED = 220;
 const WORLD_W = 800;
 const WORLD_H = 600;
-const PLAYER_RADIUS = 16;
-const BOLT_RADIUS = 5;
-const ENEMY_RADIUS = 14;
-const PLAYER_MAX_HP = 50;
-
-const PLAYER_HEIGHT = PLAYER_RADIUS * 3;
-const ENEMY_HEIGHT  = ENEMY_RADIUS * 3;
-const BOLT_Y        = PLAYER_RADIUS * 1.6;
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const hud = document.getElementById("hud")!;
@@ -86,26 +80,11 @@ scene.add(ground);
   scene.add(new THREE.LineSegments(geom, new THREE.LineBasicMaterial({ color: 0x2f343d })));
 }
 
-// ─── shared geometries/materials ────────────────────────────────────────────
+// ─── view registries ────────────────────────────────────────────────────────
 
-const playerGeom = new THREE.BoxGeometry(PLAYER_RADIUS * 2, PLAYER_HEIGHT, PLAYER_RADIUS * 2);
-const enemyGeom  = new THREE.BoxGeometry(ENEMY_RADIUS * 2,  ENEMY_HEIGHT,  ENEMY_RADIUS * 2);
-const enemyMat   = new THREE.MeshLambertMaterial({ color: 0xc64a3a });
-const boltGeom   = new THREE.SphereGeometry(BOLT_RADIUS, 12, 8);
-const boltMat    = new THREE.MeshBasicMaterial({ color: 0xf0e36a });
-
-// ─── rendered state ─────────────────────────────────────────────────────────
-
-interface RenderedPlayer { x: number; y: number; serverX: number; serverY: number; hp: number; }
-interface RenderedEnemy  { x: number; y: number; serverX: number; serverY: number; hp: number; }
-interface RenderedBolt   { x: number; y: number; serverX: number; serverY: number; }
-
-const players = new Map<string, RenderedPlayer>();
-const enemies = new Map<string, RenderedEnemy>();
-const bolts   = new Map<string, RenderedBolt>();
-const playerMeshes = new Map<string, THREE.Mesh>();
-const enemyMeshes  = new Map<string, THREE.Mesh>();
-const boltMeshes   = new Map<string, THREE.Mesh>();
+const players = new Map<string, PlayerView>();
+const enemies = new Map<string, EnemyView>();
+const bolts   = new Map<string, BoltView>();
 
 let mySessionId: string | null = null;
 const predicted = { x: 0, y: 0 };
@@ -125,7 +104,6 @@ const keymap: Record<string, Key> = {
 addEventListener("keydown", (e) => { const k = keymap[e.code]; if (k) { input[k] = true; e.preventDefault(); } });
 addEventListener("keyup",   (e) => { const k = keymap[e.code]; if (k) { input[k] = false; e.preventDefault(); } });
 
-// unlock the AudioContext on first user gesture
 const firstGesture = () => {
   unlockAudio();
   removeEventListener("keydown", firstGesture);
@@ -172,105 +150,71 @@ async function connect() {
   suppressSpawnUntil = performance.now() + 750;
 
   room.state.players.onAdd((player: any, sessionId: string) => {
-    players.set(sessionId, {
-      x: player.x, y: player.y,
-      serverX: player.x, serverY: player.y,
-      hp: player.hp,
-    });
-
-    const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(player.color) });
-    const mesh = new THREE.Mesh(playerGeom, mat);
-    mesh.position.set(player.x, PLAYER_HEIGHT / 2, player.y);
-    mesh.castShadow = true;
-    scene.add(mesh);
-    playerMeshes.set(sessionId, mesh);
+    const view = new PlayerView(player);
+    scene.add(view);
+    players.set(sessionId, view);
 
     if (sessionId === mySessionId) {
       predicted.x = player.x;
       predicted.y = player.y;
     }
 
-    let prevHp = player.hp;
     player.onChange(() => {
-      const r = players.get(sessionId);
-      if (!r) return;
-      r.serverX = player.x;
-      r.serverY = player.y;
+      const v = players.get(sessionId);
+      if (!v) return;
+      const prevHp = v.hp;
+      v.applyServerState(player);
       if (sessionId === mySessionId) {
         predicted.x = player.x;
         predicted.y = player.y;
       }
       if (player.hp < prevHp) {
         console.log("[player damage]", sessionId.slice(0,4), prevHp, "→", player.hp);
-        sfx.damage(player.x, player.y);
       }
-      prevHp = player.hp;
-      r.hp = player.hp;
     });
   });
   room.state.players.onRemove((_p: any, sessionId: string) => {
-    const mesh = playerMeshes.get(sessionId);
-    if (mesh) {
-      scene.remove(mesh);
-      (mesh.material as THREE.Material).dispose();
-    }
-    playerMeshes.delete(sessionId);
+    const v = players.get(sessionId);
+    if (v) v.dispose();
     players.delete(sessionId);
   });
 
   room.state.enemies.onAdd((enemy: any, id: string) => {
-    enemies.set(id, { x: enemy.x, y: enemy.y, serverX: enemy.x, serverY: enemy.y, hp: enemy.hp });
-    const mesh = new THREE.Mesh(enemyGeom, enemyMat);
-    mesh.position.set(enemy.x, ENEMY_HEIGHT / 2, enemy.y);
-    mesh.castShadow = true;
-    scene.add(mesh);
-    enemyMeshes.set(id, mesh);
-    if (performance.now() >= suppressSpawnUntil) sfx.spawn(enemy.x, enemy.y);
+    const playSpawnSfx = performance.now() >= suppressSpawnUntil;
+    const view = new EnemyView(enemy, { playSpawnSfx });
+    scene.add(view);
+    enemies.set(id, view);
     enemy.onChange(() => {
-      const r = enemies.get(id);
-      if (!r) return;
-      r.serverX = enemy.x;
-      r.serverY = enemy.y;
-      r.hp = enemy.hp;
+      const v = enemies.get(id);
+      if (!v) return;
+      v.applyServerState(enemy);
     });
   });
   room.state.enemies.onRemove((_e: any, id: string) => {
     console.log("[enemy-]", id);
-    const mesh = enemyMeshes.get(id);
-    if (mesh) {
-      sfx.kill(mesh.position.x, mesh.position.z);
-      scene.remove(mesh);
-    }
-    enemyMeshes.delete(id);
+    const v = enemies.get(id);
+    if (v) v.dispose();
     enemies.delete(id);
   });
 
   room.state.projectiles.onAdd((bolt: any, id: string) => {
     console.log("[bolt+]", id, "spawn=", bolt.x.toFixed(0), bolt.y.toFixed(0), "v=", bolt.vx.toFixed(0), bolt.vy.toFixed(0));
-    bolts.set(id, { x: bolt.x, y: bolt.y, serverX: bolt.x, serverY: bolt.y });
-    const mesh = new THREE.Mesh(boltGeom, boltMat);
-    mesh.position.set(bolt.x, BOLT_Y, bolt.y);
-    scene.add(mesh);
-    boltMeshes.set(id, mesh);
-    sfx.cast(bolt.x, bolt.y);
+    const view = new BoltView(bolt);
+    scene.add(view);
+    bolts.set(id, view);
     let changes = 0;
     bolt.onChange(() => {
       changes++;
       if (changes <= 3 || changes % 5 === 0) console.log("[bolt~]", id, "#", changes, "pos=", bolt.x.toFixed(0), bolt.y.toFixed(0));
-      const r = bolts.get(id);
-      if (!r) return;
-      r.serverX = bolt.x;
-      r.serverY = bolt.y;
+      const v = bolts.get(id);
+      if (!v) return;
+      v.applyServerState(bolt);
     });
   });
   room.state.projectiles.onRemove((_b: any, id: string) => {
     console.log("[bolt-]", id);
-    const mesh = boltMeshes.get(id);
-    if (mesh) {
-      sfx.hit(mesh.position.x, mesh.position.z);
-      scene.remove(mesh);
-    }
-    boltMeshes.delete(id);
+    const v = bolts.get(id);
+    if (v) v.dispose();
     bolts.delete(id);
   });
 
@@ -296,54 +240,31 @@ function frame(now: number) {
     if (input.right) dx += 1;
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
-      predicted.x = clamp(predicted.x + (dx / len) * SPEED * dt, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
-      predicted.y = clamp(predicted.y + (dy / len) * SPEED * dt, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
+      predicted.x = clamp(
+        predicted.x + (dx / len) * PlayerView.SPEED * dt,
+        PlayerView.RADIUS, WORLD_W - PlayerView.RADIUS,
+      );
+      predicted.y = clamp(
+        predicted.y + (dy / len) * PlayerView.SPEED * dt,
+        PlayerView.RADIUS, WORLD_H - PlayerView.RADIUS,
+      );
     }
   }
 
-  const lerp = 1 - Math.exp(-15 * dt);
-  players.forEach((r, id) => {
-    if (id === mySessionId) return;
-    r.x += (r.serverX - r.x) * lerp;
-    r.y += (r.serverY - r.y) * lerp;
+  players.forEach((view, id) => {
+    if (id === mySessionId) view.setPredictedPosition(predicted.x, predicted.y);
+    else view.update(dt);
   });
-  enemies.forEach((r) => {
-    r.x += (r.serverX - r.x) * lerp;
-    r.y += (r.serverY - r.y) * lerp;
-  });
-  const boltLerp = 1 - Math.exp(-30 * dt);
-  bolts.forEach((r) => {
-    r.x += (r.serverX - r.x) * boltLerp;
-    r.y += (r.serverY - r.y) * boltLerp;
-  });
-
-  playerMeshes.forEach((mesh, id) => {
-    const isMe = id === mySessionId;
-    const r = players.get(id);
-    if (!r) return;
-    mesh.position.x = isMe ? predicted.x : r.x;
-    mesh.position.z = isMe ? predicted.y : r.y;
-  });
-  enemyMeshes.forEach((mesh, id) => {
-    const r = enemies.get(id);
-    if (!r) return;
-    mesh.position.x = r.x;
-    mesh.position.z = r.y;
-  });
-  boltMeshes.forEach((mesh, id) => {
-    const r = bolts.get(id);
-    if (!r) return;
-    mesh.position.x = r.x;
-    mesh.position.z = r.y;
-  });
+  enemies.forEach((view) => view.update(dt));
+  bolts.forEach((view) => view.update(dt));
 
   if (mySessionId) {
     const me = players.get(mySessionId);
     if (me) {
       setListener(predicted.x, predicted.y);
-      const pct = Math.max(0, me.hp) / PLAYER_MAX_HP;
+      const pct = Math.max(0, me.hp) / PlayerView.MAX_HP;
       hpFill.style.width = `${pct * 100}%`;
-      hpText.textContent = `HP ${Math.max(0, me.hp)} / ${PLAYER_MAX_HP}`;
+      hpText.textContent = `HP ${Math.max(0, me.hp)} / ${PlayerView.MAX_HP}`;
     }
   }
 
@@ -355,7 +276,7 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-(window as any).__game = { players, enemies, bolts, playerMeshes, enemyMeshes, boltMeshes, predicted };
+(window as any).__game = { players, enemies, bolts, predicted };
 
 connect()
   .then(() => requestAnimationFrame(frame))
