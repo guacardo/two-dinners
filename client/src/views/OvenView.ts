@@ -10,6 +10,11 @@ export class OvenView extends THREE.Group {
   private static readonly TOP_THICKNESS = 8;
   private static readonly PANEL_HEIGHT = 18;
   private static readonly BURNER_RADIUS = 18;
+  private static readonly OPEN_ANGLE = Math.PI * 0.45;
+  private static readonly DOOR_EASE = 8;
+
+  private targetDoorAngle = 0;
+  private currentDoorAngle = 0;
 
   constructor(opts: { x: number; z: number }) {
     super();
@@ -28,12 +33,23 @@ export class OvenView extends THREE.Group {
     this.lookAt(lookTarget);
   }
 
+  setDoorOpen(open: boolean) {
+    this.targetDoorAngle = open ? OvenView.OPEN_ANGLE : 0;
+  }
+
+  update(dt: number) {
+    const k = 1 - Math.exp(-OvenView.DOOR_EASE * dt);
+    this.currentDoorAngle += (this.targetDoorAngle - this.currentDoorAngle) * k;
+    this.door.rotation.x = this.currentDoorAngle;
+  }
+
   private get bodyHeight(): number {
     return OvenView.HEIGHT - OvenView.TOP_THICKNESS;
   }
 
+  // +Z is the door side: Object3D.lookAt() orients local +Z toward the target.
   private get frontZ(): number {
-    return -OvenView.DEPTH / 2;
+    return OvenView.DEPTH / 2;
   }
 
   private buildBody(): THREE.Mesh {
@@ -92,7 +108,7 @@ export class OvenView extends THREE.Group {
       new THREE.BoxGeometry(OvenView.WIDTH - 12, OvenView.PANEL_HEIGHT, 2),
       topMat,
     );
-    panel.position.set(0, panelY, this.frontZ - 1);
+    panel.position.set(0, panelY, this.frontZ + 1);
     group.add(panel);
 
     for (const kx of [-32, 0, 32]) {
@@ -101,7 +117,7 @@ export class OvenView extends THREE.Group {
         metalMat,
       );
       knob.rotation.x = Math.PI / 2;
-      knob.position.set(kx, panelY, this.frontZ - 3);
+      knob.position.set(kx, panelY, this.frontZ + 3);
       group.add(knob);
     }
     return group;
@@ -120,7 +136,7 @@ export class OvenView extends THREE.Group {
       new THREE.BoxGeometry(doorWidth, doorHeight, 3),
       doorMat,
     );
-    panel.position.set(0, doorHeight / 2, -1.5);
+    panel.position.set(0, doorHeight / 2, 1.5);
     panel.castShadow = true;
     group.add(panel);
 
@@ -128,7 +144,7 @@ export class OvenView extends THREE.Group {
       new THREE.BoxGeometry(doorWidth * 0.7, doorHeight * 0.55, 1),
       windowMat,
     );
-    win.position.set(0, doorHeight * 0.55, -3.2);
+    win.position.set(0, doorHeight * 0.55, 3.2);
     group.add(win);
 
     const handle = new THREE.Mesh(
@@ -136,7 +152,7 @@ export class OvenView extends THREE.Group {
       metalMat,
     );
     handle.rotation.z = Math.PI / 2;
-    handle.position.set(0, doorHeight - 6, -4);
+    handle.position.set(0, doorHeight - 6, 4);
     group.add(handle);
 
     return group;

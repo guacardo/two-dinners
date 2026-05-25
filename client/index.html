@@ -36,18 +36,112 @@
       }
       #hp-bar { width: 200px; height: 10px; background: #000; }
       #hp-fill { height: 100%; background: #d0556a; width: 100%; transition: width 80ms linear; }
+
+      /* ── lobby screen ────────────────────────────────────────────────── */
+      #lobby-screen {
+        width: 100%;
+        max-width: 720px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .lobby-section {
+        border: 1px solid #2a2d33;
+        padding: 12px;
+      }
+      .lobby-section h2 {
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-weight: 500;
+        opacity: 0.6;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #char-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+      }
+      .char-cell {
+        border: 1px solid #2a2d33;
+        background: #16181d;
+        color: inherit;
+        font: inherit;
+        padding: 10px 8px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        text-align: center;
+      }
+      .char-cell:hover:not([disabled]) { border-color: #4a90e2; }
+      .char-cell[aria-pressed="true"] { border-color: #4a90e2; background: #1a2231; }
+      .char-cell[disabled] { opacity: 0.35; cursor: not-allowed; }
+      .char-swatch {
+        width: 36px;
+        height: 36px;
+        border: 1px solid #2a2d33;
+      }
+      .char-name { font-size: 12px; }
+      .char-abilities { font-size: 10px; opacity: 0.5; }
+      .char-taken { font-size: 9px; opacity: 0.5; letter-spacing: 0.05em; }
+
+      #roster { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+      .roster-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+      .roster-swatch { width: 14px; height: 14px; border: 1px solid #2a2d33; flex-shrink: 0; }
+      .roster-name { flex: 1; }
+      .roster-name.self { color: #fff; }
+      .roster-name.empty { opacity: 0.4; font-style: italic; }
+      .roster-ready { font-size: 10px; opacity: 0.55; letter-spacing: 0.08em; }
+      .roster-ready.is-ready { color: #3fb950; opacity: 1; }
+
+      #lobby-controls { display: flex; gap: 8px; align-items: center; }
+      #ready-btn {
+        background: #16181d;
+        color: #cfd2d8;
+        border: 1px solid #2a2d33;
+        padding: 10px 16px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      #ready-btn:hover:not([disabled]) { border-color: #4a90e2; }
+      #ready-btn[disabled] { opacity: 0.35; cursor: not-allowed; }
+      #ready-btn.is-ready { border-color: #3fb950; color: #3fb950; }
+      #lobby-status { font-size: 11px; opacity: 0.55; }
+
+      .hidden { display: none !important; }
     </style>
   </head>
   <body>
-    <h1>two-dinners — WASD/arrows to move, left-click to cast. open a second tab for co-op.</h1>
-    <div id="stage">
+    <h1>two-dinners — pick a character, ready up, then WASD/arrows to move, left-click to cast.</h1>
+
+    <div id="lobby-screen">
+      <div class="lobby-section">
+        <h2>character</h2>
+        <div id="char-grid"></div>
+      </div>
+      <div class="lobby-section">
+        <h2>lobby (<span id="lobby-count">0</span>)</h2>
+        <div id="roster"></div>
+      </div>
+      <div id="lobby-controls">
+        <button id="ready-btn" disabled>ready</button>
+        <div id="lobby-status">connecting…</div>
+      </div>
+    </div>
+
+    <div id="stage" class="hidden">
       <canvas id="game" width="800" height="600"></canvas>
       <div id="hp">
         <div id="hp-bar"><div id="hp-fill"></div></div>
         <div id="hp-text">HP 50 / 50</div>
       </div>
     </div>
-    <div id="hud">connecting…</div>
+    <div id="hud" class="hidden">connecting…</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
