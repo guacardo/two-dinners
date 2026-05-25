@@ -4,6 +4,7 @@ import { startGame } from "./game";
 
 const stage = document.getElementById("stage")!;
 const hud = document.getElementById("hud")!;
+const hp = document.getElementById("hp")!;
 const lobbyStatus = document.getElementById("lobby-status")!;
 
 async function main() {
@@ -12,6 +13,7 @@ async function main() {
   hideLobby();
   stage.classList.remove("hidden");
   hud.classList.remove("hidden");
+  hp.classList.remove("hidden");
   await startGame(client, reservation);
 }
 

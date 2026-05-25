@@ -10,6 +10,10 @@ import { SeatReservation } from "./lobby";
 const WORLD_W = 800;
 const WORLD_H = 600;
 
+// Camera-space units per CSS pixel. Smaller = more zoomed in; larger = see more
+// world on bigger monitors (Escape-from-Duckov style). Tune by feel.
+const WORLD_UNITS_PER_PIXEL = 0.75;
+
 export async function startGame(client: Client, reservation: SeatReservation): Promise<void> {
   const canvas = document.getElementById("game") as HTMLCanvasElement;
   const hud = document.getElementById("hud")!;
@@ -21,20 +25,30 @@ export async function startGame(client: Client, reservation: SeatReservation): P
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x16181d);
 
-  const ASPECT = canvas.width / canvas.height;
-  const VIEW_W = 1100;
-  const VIEW_H = VIEW_W / ASPECT;
-  const camera = new THREE.OrthographicCamera(-VIEW_W / 2, VIEW_W / 2, VIEW_H / 2, -VIEW_H / 2, -2000, 4000);
-
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 4000);
   const worldCenter = new THREE.Vector3(WORLD_W / 2, 0, WORLD_H / 2);
   camera.position.set(worldCenter.x + 600, 600, worldCenter.z + 600);
   camera.lookAt(worldCenter);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(canvas.width, canvas.height, false);
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  function resize() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    const viewW = w * WORLD_UNITS_PER_PIXEL;
+    const viewH = h * WORLD_UNITS_PER_PIXEL;
+    camera.left = -viewW / 2;
+    camera.right = viewW / 2;
+    camera.top = viewH / 2;
+    camera.bottom = -viewH / 2;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener("resize", resize);
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.55));
   const dir = new THREE.DirectionalLight(0xffffff, 0.8);
