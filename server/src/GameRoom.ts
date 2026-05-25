@@ -1,7 +1,8 @@
 import { Room, Client } from "@colyseus/core";
 import { Schema, MapSchema, type } from "@colyseus/schema";
 import { aabbOverlap } from "./collision";
-import { CHARACTERS, isCharacterId, CharacterId } from "./characters";
+import { CHARACTERS, isCharacterId, CharacterId, AbilityId } from "./characters";
+import { ABILITIES, primaryAbility } from "./abilities";
 
 class Player extends Schema {
   @type("number") x: number = 400;
@@ -21,6 +22,7 @@ class Projectile extends Schema {
   @type("number") vx: number = 0;
   @type("number") vy: number = 0;
   @type("string") ownerId: string = "";
+  @type("string") kind: string = "bolt";
 
   static readonly HALF_W = 5;
   static readonly HALF_D = 5;
@@ -69,10 +71,6 @@ const SPEED = 220;
 const TICK_RATE = 20;
 const WORLD_W = 800;
 const WORLD_H = 600;
-
-const BOLT_SPEED = 600;
-const BOLT_DAMAGE = 5;
-const CAST_COOLDOWN = 0.4;
 
 const ENEMY_SPEED = 90;
 const ENEMY_MAX_HP = 10;
@@ -138,19 +136,25 @@ export class GameRoom extends Room<GameState> {
     const player = this.state.players.get(sessionId);
     if (!player) return;
     if ((this.castCooldowns.get(sessionId) ?? 0) > 0) return;
+
+    const abilityId = primaryAbility(player.characterId);
+    if (!abilityId) return;
+    const def = ABILITIES[abilityId];
+
     const len = Math.hypot(msg.dx, msg.dy);
     if (!isFinite(len) || len < 1e-4) return;
 
     const nx = msg.dx / len;
     const ny = msg.dy / len;
     const bolt = new Projectile();
+    bolt.kind = abilityId;
     bolt.x = player.x + nx * (Player.HALF_W + Projectile.HALF_W + 2);
     bolt.y = player.y + ny * (Player.HALF_D + Projectile.HALF_D + 2);
-    bolt.vx = nx * BOLT_SPEED;
-    bolt.vy = ny * BOLT_SPEED;
+    bolt.vx = nx * def.projectileSpeed;
+    bolt.vy = ny * def.projectileSpeed;
     bolt.ownerId = sessionId;
     this.state.projectiles.set(this.allocId("p"), bolt);
-    this.castCooldowns.set(sessionId, CAST_COOLDOWN);
+    this.castCooldowns.set(sessionId, def.cooldown);
   }
 
   private tick(dt: number) {
@@ -190,7 +194,8 @@ export class GameRoom extends Room<GameState> {
       });
       if (hitEnemy) {
         const enemy = this.state.enemies.get(hitEnemy)!;
-        enemy.hp -= BOLT_DAMAGE;
+        const def = ABILITIES[bolt.kind as AbilityId] ?? ABILITIES.bolt;
+        enemy.hp -= def.damage;
         projectileIdsToRemove.push(id);
         if (enemy.hp <= 0) this.state.enemies.delete(hitEnemy);
         return;

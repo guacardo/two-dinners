@@ -4,7 +4,10 @@ import { setListener, unlockAudio } from "./audio";
 import { PlayerView } from "./views/PlayerView";
 import { EnemyView } from "./views/EnemyView";
 import { BoltView } from "./views/BoltView";
+import { DaintyTipView } from "./views/DaintyTipView";
 import { OvenView } from "./views/OvenView";
+
+type ProjectileView = BoltView | DaintyTipView;
 import { SeatReservation } from "./lobby";
 
 const WORLD_W = 800;
@@ -98,10 +101,10 @@ export async function startGame(client: Client, reservation: SeatReservation): P
 
   // ─── view registries ──────────────────────────────────────────────────────
 
-  const players = new Map<string, PlayerView>();
-  const enemies = new Map<string, EnemyView>();
-  const bolts   = new Map<string, BoltView>();
-  const bosses  = new Map<string, OvenView>();
+  const players     = new Map<string, PlayerView>();
+  const enemies     = new Map<string, EnemyView>();
+  const projectiles = new Map<string, ProjectileView>();
+  const bosses      = new Map<string, OvenView>();
 
   let mySessionId: string | null = null;
   const predicted = { x: 0, y: 0 };
@@ -212,24 +215,26 @@ export async function startGame(client: Client, reservation: SeatReservation): P
   });
 
   room.state.projectiles.onAdd((bolt: any, id: string) => {
-    console.log("[bolt+]", id, "spawn=", bolt.x.toFixed(0), bolt.y.toFixed(0), "v=", bolt.vx.toFixed(0), bolt.vy.toFixed(0));
-    const view = new BoltView(bolt);
+    console.log("[proj+]", id, bolt.kind, "spawn=", bolt.x.toFixed(0), bolt.y.toFixed(0), "v=", bolt.vx.toFixed(0), bolt.vy.toFixed(0));
+    const view: ProjectileView = bolt.kind === "daintyTip"
+      ? new DaintyTipView(bolt)
+      : new BoltView(bolt);
     scene.add(view);
-    bolts.set(id, view);
+    projectiles.set(id, view);
     let changes = 0;
     bolt.onChange(() => {
       changes++;
-      if (changes <= 3 || changes % 5 === 0) console.log("[bolt~]", id, "#", changes, "pos=", bolt.x.toFixed(0), bolt.y.toFixed(0));
-      const v = bolts.get(id);
+      if (changes <= 3 || changes % 5 === 0) console.log("[proj~]", id, "#", changes, "pos=", bolt.x.toFixed(0), bolt.y.toFixed(0));
+      const v = projectiles.get(id);
       if (!v) return;
       v.applyServerState(bolt);
     });
   });
   room.state.projectiles.onRemove((_b: any, id: string) => {
-    console.log("[bolt-]", id);
-    const v = bolts.get(id);
+    console.log("[proj-]", id);
+    const v = projectiles.get(id);
     if (v) v.dispose();
-    bolts.delete(id);
+    projectiles.delete(id);
   });
 
   room.state.bosses.onAdd((boss: any, id: string) => {
@@ -283,7 +288,7 @@ export async function startGame(client: Client, reservation: SeatReservation): P
       else view.update(dt);
     });
     enemies.forEach((view) => view.update(dt));
-    bolts.forEach((view) => view.update(dt));
+    projectiles.forEach((view) => view.update(dt));
 
     bosses.forEach((view) => {
       view.update(dt);
@@ -304,7 +309,7 @@ export async function startGame(client: Client, reservation: SeatReservation): P
     requestAnimationFrame(frame);
   }
 
-  (window as any).__game = { players, enemies, bolts, bosses, predicted };
+  (window as any).__game = { players, enemies, projectiles, bosses, predicted };
 
   requestAnimationFrame(frame);
 }
