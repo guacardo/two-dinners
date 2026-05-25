@@ -4,6 +4,7 @@ import { setListener, unlockAudio } from "./audio";
 import { PlayerView } from "./views/PlayerView";
 import { EnemyView } from "./views/EnemyView";
 import { BoltView } from "./views/BoltView";
+import { OvenView } from "./views/OvenView";
 
 const WORLD_W = 800;
 const WORLD_H = 600;
@@ -79,6 +80,11 @@ scene.add(ground);
   geom.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
   scene.add(new THREE.LineSegments(geom, new THREE.LineBasicMaterial({ color: 0x2f343d })));
 }
+
+// ─── boss ───────────────────────────────────────────────────────────────────
+
+const oven = new OvenView({ x: WORLD_W / 2, z: WORLD_H * 0.3 });
+scene.add(oven);
 
 // ─── view registries ────────────────────────────────────────────────────────
 
@@ -257,6 +263,8 @@ function frame(now: number) {
   });
   enemies.forEach((view) => view.update(dt));
   bolts.forEach((view) => view.update(dt));
+
+  if (mySessionId) oven.faceToward(predicted.x, predicted.y);
 
   if (mySessionId) {
     const me = players.get(mySessionId);
