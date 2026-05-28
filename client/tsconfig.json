@@ -7,7 +7,9 @@
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM"],
     "useDefineForClassFields": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["svelte"],
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src"]
 }

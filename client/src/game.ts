@@ -6,9 +6,10 @@ import { EnemyView } from "./views/EnemyView";
 import { BoltView } from "./views/BoltView";
 import { DaintyTipView } from "./views/DaintyTipView";
 import { OvenView } from "./views/OvenView";
+import { SeatReservation } from "./connection/lobby";
+import { gameStore } from "./stores/game";
 
 type ProjectileView = BoltView | DaintyTipView;
-import { SeatReservation } from "./lobby";
 
 const WORLD_W = 800;
 const WORLD_H = 600;
@@ -19,9 +20,13 @@ const WORLD_UNITS_PER_PIXEL = 0.75;
 
 export async function startGame(client: Client, reservation: SeatReservation): Promise<void> {
   const canvas = document.getElementById("game") as HTMLCanvasElement;
-  const hud = document.getElementById("hud")!;
-  const hpFill = document.getElementById("hp-fill") as HTMLDivElement;
-  const hpText = document.getElementById("hp-text") as HTMLDivElement;
+
+  gameStore.set({
+    hp: PlayerView.MAX_HP,
+    maxHp: PlayerView.MAX_HP,
+    sessionId: null,
+    connectionStatus: "connecting…",
+  });
 
   // ─── three setup ──────────────────────────────────────────────────────────
 
@@ -163,7 +168,11 @@ export async function startGame(client: Client, reservation: SeatReservation): P
 
   const room: Room<any> = await client.consumeSeatReservation<any>(reservation);
   mySessionId = room.sessionId;
-  hud.textContent = `connected · session ${mySessionId.slice(0, 6)}`;
+  gameStore.update((s) => ({
+    ...s,
+    sessionId: mySessionId,
+    connectionStatus: `connected · session ${mySessionId!.slice(0, 6)}`,
+  }));
   suppressSpawnUntil = performance.now() + 750;
 
   room.state.players.onAdd((player: any, sessionId: string) => {
@@ -255,7 +264,9 @@ export async function startGame(client: Client, reservation: SeatReservation): P
   setInterval(() => room.send("input", input), 1000 / 30);
   sendCast = (dx, dy) => room.send("cast", { dx, dy });
 
-  room.onLeave(() => { hud.textContent = "disconnected"; });
+  room.onLeave(() => {
+    gameStore.update((s) => ({ ...s, connectionStatus: "disconnected" }));
+  });
 
   // ─── game loop ────────────────────────────────────────────────────────────
 
@@ -299,9 +310,7 @@ export async function startGame(client: Client, reservation: SeatReservation): P
       const me = players.get(mySessionId);
       if (me) {
         setListener(predicted.x, predicted.y);
-        const pct = Math.max(0, me.hp) / PlayerView.MAX_HP;
-        hpFill.style.width = `${pct * 100}%`;
-        hpText.textContent = `HP ${Math.max(0, me.hp)} / ${PlayerView.MAX_HP}`;
+        gameStore.update((s) => (s.hp === me.hp ? s : { ...s, hp: me.hp }));
       }
     }
 
